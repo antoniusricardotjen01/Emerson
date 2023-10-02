@@ -1,0 +1,242 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Home";
+}
+
+<div class="col-lg-12 col-md-12 col-xl-12 col sm-12">
+    <div class="col-lg-12 col-md-12 col-xl-12 col sm-12">
+        <div class="row">
+            <div class="col-2 col-sm-2 col-lg-2">
+                <label class="form-label">Variable Name</label>
+            </div>
+            <div class="col-4 col-sm-4 col-lg-4">
+                <select id="NameType" class="form-control">
+                    <option value="Temperature">Temperature</option>
+                    <option value="Humidity">Humidity</option>
+                </select>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-2 col-sm-2 col-lg-2">
+                <label class="form-label">Timestamp Start Date</label>
+            </div>
+            <div class="col-4 col-sm-4 col-lg-4">
+                <input type="text" class="form-control" id="startDatePicker">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-2 col-sm-2 col-lg-2">
+                <label class="form-label">Timestamp End Date</label>
+            </div>
+            <div class="col-4 col-sm-4 col-lg-4">
+                <input type="text" class="form-control" id="endDatePicker">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-2 col-sm-2 col-lg-2">
+                City Name
+            </div>
+            <div class="col-4 col-sm-4 col-lg-4">
+                <select id="cityName" class="form-control">
+                    <option value="" selected>All</option>
+                </select>
+            </div>
+        </div>
+        <br />
+        <div class="row">
+            <div class="col-2 col-sm-2 col-lg-2">
+            </div>
+            <div class="col-9 col-sm-9 col-lg-9 row">
+                <button type="submit" id="Submit" class="btn btn-primary col-3 col-sm-3 col-lg-3" onclick="Submit(1);">Get Report</button>
+                <button type="submit" id="Submit" class="btn btn-primary col-3 col-sm-3 col-lg-3" onclick="Submit(2);">Get Highest Number of Days over 30 C in January 2023</button>
+                <button type="submit" id="Submit" class="btn btn-primary col-3 col-sm-3 col-lg-3" onclick="Submit(3);">Get Highest Average Humidity in January 2023</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-12 col-md-12 col-xl-12 col sm-12">
+        <div class="spinner-border" role="status" id="loadingImage">
+        </div>
+        <div id="curve_chart" style="width: 1200px; height: 500px"></div>
+        <div class="card" id="NumberOfDays">
+            <div class="container">
+
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script type="text/javascript">
+        const globalurl = 'https://emersonapi.azurewebsites.net/'; // 'https://localhost:7027/';
+        let Datalsts = [];
+
+        $(document).ready(function () {
+            $('#loadingImage').hide();
+            $('#startDatePicker').datepicker({
+                defaultDate: new Date(),
+                dateFormat: 'mm-dd-yy',
+                onSelect: function (dateStr) {
+                    $("#endDatePicker").val(dateStr);
+                    $("#endDatePicker").datepicker("option", { minDate: new Date(dateStr) })
+                }
+            });
+            $('#endDatePicker').datepicker({
+                dateFormat: 'mm-dd-yy'
+            });
+
+            LoadAllCities();
+
+            google.charts.load('current', { 'packages': ['corechart'] });
+        });
+
+
+        function drawChart() {
+
+            var GoogleData = google.visualization.arrayToDataTable(Datalsts);
+
+            var options = {
+                title: '',
+                curveType: 'function',
+                legend: { position: 'bottom' }
+            };
+
+            var chart = new google.visualization.LineChart(document.getElementById('curve_chart'));
+
+            chart.draw(GoogleData, options);
+        }
+
+        function LoadAllCities() {
+            $.ajax({
+                url: globalurl + ('Emerson/GetAllCities') ,
+                type: 'GET',
+                success: function (response) {
+                    let Cities = response;
+                    for (var index = 0; index < Cities.length; index++) {
+                        $('#cityName').append($('<option>').val(Cities[index].id).text(Cities[index].cityName));
+                    }
+                },
+                error: function (error) {
+                    console.log(error);
+                }
+            })
+        }
+
+        function Submit(number) {
+            $('#NumberOfDays .container').empty();
+            $('#curve_chart').empty();
+            $('#loadingImage').show();
+            $('#Submit').hide();
+            $('#curve_chart').hide();
+            $('#NumberOfDays').hide();
+
+            switch (number) { 
+                case 1:
+                    GetReport();
+                    break;
+                case 2:
+                    GetNumberDays();
+                    break;
+                case 3:
+                    GetAverageHighest();
+                    break;
+            }
+        }
+
+        function GetReport() {
+            const varName   = $('#NameType').val();
+            const startDate = $('#startDatePicker').val();
+            const endDate   = $('#endDatePicker').val();
+            const cityid  = $('#cityName').val();
+
+            let input = {
+                startFilterDate: startDate,
+                endFilterDate: endDate,
+                cityid: cityid,
+                name: varName
+            };
+
+            $.ajax({
+                url: globalurl.concat('Emerson/GetVariables'),
+                type : 'POST',
+                contentType : "application/json",
+                data: JSON.stringify(input),
+                success : function(response) {
+                    $('#loadingImage').hide();
+                    $('#Submit').show();
+                    if (response && response.dataResult.length > 0) {
+                        Datalsts = response.dataResult;
+                        $('#curve_chart').show();
+                        setTimeout(function () {
+                            google.charts.setOnLoadCallback(drawChart);
+                        }, 500);
+                    } else {
+                        alert('No relevant data based on selection criteria');
+                    }
+                },
+                error: function (error) {
+                    if (error.status && error.status == 400) {
+                        alert("No Data is Found");
+                    } else {
+                        alert("OOps there is an error");
+                        //console.log(error);
+                    }
+                    $('#loadingImage').hide();
+                    $('#Submit').show();
+                }
+            })
+        }
+
+        function GetAverageHighest() {
+            $.ajax({
+                url: globalurl.concat('Emerson/GetCitiesWithAvgHumidity/2023/01'),
+                type: 'GET',
+                success: function (response) {
+                    $('#loadingImage').hide();
+                    $('#Submit').show();
+                    if (response != null) {
+                        $('#NumberOfDays').show();
+                        $('#NumberOfDays .container').append("<h4>Moistest City</h4><p>" + response.cityName + "</p><p>" + response.averageHumidity + " % </p>");
+                    }
+                },
+                error: function (error) {
+                    if (error.status && error.status == 400) {
+                        alert("No Data is Found");
+                    } else {
+                        alert("OOps there is an error");
+                        //console.log(error);
+                    }
+                    $('#loadingImage').hide();
+                    $('#Submit').show();
+                }
+            })
+        }
+
+        function GetNumberDays() {
+            $.ajax({
+                url: globalurl.concat('Emerson/GetNumDaysTempOverInCelcius/2023/01/30'),
+                type: 'GET',
+                success: function (response) {
+                    Datalsts = response;
+                    $('#loadingImage').hide();
+                    $('#Submit').show();
+                    if (response != null) {
+                        $('#NumberOfDays').show();
+                        $('#NumberOfDays .container').append("<h4>Hottest City</h4><p>" + response.cityName + "</p><p>" + response.numOfDay + " day(s) </p>");
+                    }
+                },
+                error: function (error) {
+                    if (error.status && error.status == 400) {
+                        alert("No Data is Found");
+                    } else {
+                        alert("OOps there is an error");
+                        //console.log(error);
+                    }
+                    $('#loadingImage').hide();
+                    $('#Submit').show();
+                }
+            })
+        }
+
+    </script>
+}
