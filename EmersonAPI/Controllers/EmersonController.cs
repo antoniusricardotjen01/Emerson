@@ -40,19 +40,11 @@ namespace EmersonAPI.Controllers
             if (allData.Any())
             {
 
-                var cityLsts = _iCityService.GetAllCities().OrderBy(x => x.CityName);
-                if (!cityLsts.Any())
-                {
-                    return BadRequest();
-                }
-
-                var allCities = cityLsts.Select(x => x.CityName);
-
+                var allCities = _iCityService.GetAllCities().OrderBy(x => x.CityName).Select(x => x.CityName);
                 List<string> header = new List<string>() { "Date" };
                 header.AddRange(allCities);
 
-                ArrayList result = new ArrayList();
-                result.Add(header);
+                ArrayList result = new ArrayList() { header };
 
                 var groupCities = allData.GroupBy(x => x.timestamp).Select(x => new { Timestamp = x.Key, Data = x });
                 foreach (var group in groupCities)
